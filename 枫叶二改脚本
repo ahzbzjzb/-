@@ -1,0 +1,803 @@
+getgenv().GG = {
+    Language = {
+        CheckboxEnabled = "Enabled",
+        CheckboxDisabled = "Disabled",
+        SliderValue = "Value",
+        DropdownSelect = "Select",
+        DropdownNone = "None",
+        DropdownSelected = "Selected",
+        ButtonClick = "Click",
+        TextboxEnter = "Enter",
+        ModuleEnabled = "Enabled",
+        ModuleDisabled = "Disabled",
+        TabGeneral = "General",
+        TabSettings = "Settings",
+        Loading = "Loading...",
+        Error = "Error",
+        Success = "Success"
+    }
+}
+
+-- Replace the SelectedLanguage with a reference to GG.Language
+local SelectedLanguage = GG.Language
+
+function convertStringToTable(inputString)
+    local result = {}
+    for value in string.gmatch(inputString, "([^,]+)") do
+        local trimmedValue = value:match("^%s*(.-)%s*$")
+        table.insert(result, trimmedValue)
+    end
+    return result
+end
+
+function convertTableToString(inputTable)
+    return table.concat(inputTable, ", ")
+end
+
+local ContextActionService = game:GetService("ContextActionService")
+local Phantom = false
+
+local function BlockMovement(actionName, inputState, inputObject)
+    return Enum.ContextActionResult.Sink
+end
+
+local UserInputService = game:GetService("UserInputService")
+local ContentProvider = game:GetService("ContentProvider")
+local TweenService = game:GetService("TweenService")
+local HttpService = game:GetService("HttpService")
+local TextService = game:GetService("TextService")
+local RunService = game:GetService("RunService")
+local Lighting = game:GetService("Lighting")
+local Players = game:GetService("Players")
+local CoreGui = game:GetService("CoreGui")
+local Debris = game:GetService("Debris")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local VirtualInputService = game:GetService("VirtualInputManager")
+
+-----------------------------------------------------------
+-- AUTO PARRY AND SPAM SYSTEM INTEGRATION
+-----------------------------------------------------------
+local LocalPlayer = Players.LocalPlayer
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local Humanoid = Character:FindFirstChildOfClass("Humanoid")
+local Workspace = game:GetService("Workspace")
+local ServerStatsItem = game:GetService("Stats").Network.ServerStatsItem
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Aerodynamic = false
+local Aerodynamic_Time = tick()
+local Last_Input = UserInputService:GetLastInputType()
+local Alive = workspace.Alive
+local Vector2_Mouse_Location = nil
+local Grab_Parry = nil
+local pingBased = true
+local Remotes = {}
+local Parry_Key = nil
+local Spamming = false
+local SpamSpeed = 7
+local InfinityD, TimeHoleD, SingularityD, SOFD, Abil, CDP, Phantom = false, false, false, false, false, false, false
+local EffectClasses = {ParticleEmitter=true, Beam=true, Trail=true, Explosion=true}
+local Connections_Manager = {}
+local Parried = false
+local Last_Parry = 0
+local NoRender = nil
+local Xurr = (0.7 + (8 - 1) * (0.35 / 99))
+local Closest_Entity = nil
+local strafeEnabled, autoClaimRewards, CameraFOVEnabled = false, false, false
+local StrafeSpeed, CameraFOV = 36, 70
+
+-- Find remote keys
+task.spawn(function()
+    for _, Value in pairs(getgc()) do
+        if ((type(Value) == "function") and islclosure(Value)) then
+            if debug.getupvalues(Value) then
+                local Protos = debug.getprotos(Value)
+                local Upvalues = debug.getupvalues(Value)
+                local Constants = debug.getconstants(Value)
+                if ((#Protos == 4) and (#Upvalues == 24) and (#Constants == 104)) then
+                    Remotes[debug.getupvalue(Value, 16)] = debug.getconstant(Value, 62)
+                    Parry_Key = debug.getupvalue(Value, 17)
+                    Remotes[debug.getupvalue(Value, 18)] = debug.getconstant(Value, 64)
+                    Remotes[debug.getupvalue(Value, 19)] = debug.getconstant(Value, 65)
+                    break
+                end
+            end
+        end
+    end
+end)
+
+local Key = Parry_Key
+local Parries = 0
+local Selected_Parry_Type = "Straight"
+
+local StarX = {}
+
+StarX.FetchBalls = function()
+    local folder = workspace:FindFirstChild(workspace.Alive:FindFirstChild(tostring(LocalPlayer)) and "Balls" or "TrainingBalls")
+    if not folder then return {} end
+
+    local balls = {}
+    for _, ball in ipairs(folder:GetChildren()) do
+        if ball:GetAttribute("realBall") then
+            ball.CanCollide = false
+            balls[#balls + 1] = ball
+        end
+    end
+    return balls
+end
+
+StarX.FetchBall = function()
+    local folder = workspace:FindFirstChild(workspace.Alive:FindFirstChild(tostring(LocalPlayer)) and "Balls" or "TrainingBalls")
+    if not folder then return end
+
+    for _, ball in ipairs(folder:GetChildren()) do
+        if ball:GetAttribute("realBall") then
+            ball.CanCollide = false
+            return ball
+        end
+    end
+end
+
+StarX.Parry_Data = function()
+    local cam, char = workspace.CurrentCamera, LocalPlayer.Character
+    if not cam then return {0, CFrame.new(), {}, {0, 0}} end
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return {0, CFrame.new(), {}, {0, 0}} end
+
+    local ccf, cpos, look, right, up = cam.CFrame, cam.CFrame.Position, cam.CFrame.LookVector, cam.CFrame.RightVector, cam.CFrame.UpVector
+    local vs = cam.ViewportSize
+    local mouse = (Last_Input == Enum.UserInputType.MouseButton1 or Last_Input == Enum.UserInputType.MouseButton2 or Last_Input == Enum.UserInputType.Keyboard)
+        and UserInputService:GetMouseLocation() or Vector2.new(vs.X * 0.5, vs.Y * 0.5)
+    Vector2_Mouse_Location = {mouse.X, mouse.Y}
+
+    local events = {}
+    for _, v in ipairs(workspace.Alive:GetChildren()) do
+        local pp = v.PrimaryPart
+        if pp then events[tostring(v)] = cam:WorldToScreenPoint(pp.Position) end
+    end
+
+    local dirCF
+    if Selected_Parry_Type == "Straight" then
+        local closest, dist, mv = nil, math.huge, Vector2.new(mouse.X, mouse.Y)
+        for _, v in ipairs(workspace.Alive:GetChildren()) do
+            if v ~= char and v.PrimaryPart then
+                local pos, onScreen = cam:WorldToScreenPoint(v.PrimaryPart.Position)
+                if onScreen then
+                    local d = (mv - Vector2.new(pos.X, pos.Y)).Magnitude
+                    if d < dist then dist, closest = d, v end
+                end
+            end
+        end
+        local target = closest or StarX.Get_Closest()
+        dirCF = CFrame.new(hrp.Position, (target and target.PrimaryPart and target.PrimaryPart.Position) or (hrp.Position + look * 100))
+    else
+        local dirs = {
+            Custom = ccf,
+            Random = CFrame.new(cpos, Vector3.new(math.random(-3e3, 3e3), math.random(-3e3, 3e3), math.random(-3e3, 3e3))),
+            Backwards = CFrame.new(cpos, cpos - look * 1e3),
+            Up = CFrame.new(cpos, cpos + up * 1e3),
+            Right = CFrame.new(cpos, cpos + right * 1e3),
+            Left = CFrame.new(cpos, cpos - right * 1e3)
+        }
+        dirCF = dirs[Selected_Parry_Type] or ccf
+    end
+
+    return {0, dirCF, events, Vector2_Mouse_Location}
+end
+
+StarX.Parry = function()
+    local data = StarX.Parry_Data()
+    for r, a in pairs(Remotes) do
+        r:FireServer(a, Key, data[1], data[2], data[3], data[4])
+    end
+    if Parries > 7 then return false end
+    Parries = Parries + 1
+    task.delay(0.6, function() if Parries > 0 then Parries = Parries - 1 end end)
+end
+
+local Runtime = workspace:FindFirstChild("Runtime")
+local Tornado_Time = tick()
+local LR, VelHist, LastWarp, LastCurve = 0, {}, tick(), tick()
+
+StarX.Lerp = function(a, b, t) return a + (b - a) * t end
+
+local Angle = function(a, b) return math.deg(math.acos(math.clamp(a:Dot(b), -1, 1))) end
+
+function StarX.Curved()
+    local b = StarX.FetchBall()
+    if not b or not b:FindFirstChild("zoomies") then return false end
+    
+    local z, v = b.zoomies, b.zoomies.VectorVelocity
+    local s, d = v.Magnitude, v.Unit
+    local r = LocalPlayer.Character and LocalPlayer.Character.PrimaryPart
+    if not r then return false end
+    
+    local p, bp = r.Position, b.Position
+    local dir, dist = (p - bp).Unit, (p - bp).Magnitude
+    local dot = dir:Dot(d)
+    local ping = ServerStatsItem["Data Ping"]:GetValue()
+    
+    if ping > 150 then 
+        ping = ping * 1.1
+    elseif ping > 200 then 
+        ping = ping * 1.25
+    end
+    
+    table.insert(VelHist, v)
+    if #VelHist > 4 then table.remove(VelHist, 1) end
+    
+    local rt = dist / s - ping / 985
+    local dT = 15 - math.min(dist / 1000, 15) + math.min(s / 100, 40)
+    
+    if b:FindFirstChild("AeroDynamicSlashVFX") then
+        Debris:AddItem(b.AeroDynamicSlashVFX, 0)
+        Tornado_Time = tick()
+    end
+    
+    if Runtime:FindFirstChild("Tornado") and (tick() - Tornado_Time) < ((Runtime.Tornado:GetAttribute("TornadoTime") or 1) + 0.314159) then
+        return true
+    end
+    
+    if s > 160 and rt > ping / 9.85 then
+        local adjust = s < 300 and 15 or s < 600 and 16 or s < 1000 and 17 or s < 1500 and 19 or 20
+        dT = math.max(dT - adjust, adjust)
+    end
+    
+    if dist < dT then return false end
+    
+    local curve_time = s < 300 and rt / 1.2 or s < 450 and rt / 1.21 or s < 600 and rt / 1.335 or rt / 1.5
+    if (tick() - LastCurve) < curve_time then return true end
+    
+    local dth = 0.485 - ping / 985
+    local diff = dir:Dot((d - v.Unit).Unit)
+    if (dot - diff) < dth then return true end
+    
+    local rad = math.deg(math.asin(math.clamp(dot, -1, 1)))
+    LR = StarX.Lerp(LR, rad, 0.8)
+    
+    local warp_time = s < 300 and rt / 1.185 or rt / 1.5
+    local warp_thres = s < 300 and 0.0205 or 0.018
+    if LR < warp_thres then LastWarp = tick() end
+    if (tick() - LastWarp) < warp_time then return true end
+    
+    if #VelHist == 4 then
+        local dv = function(i) return dir:Dot((d - VelHist[i].Unit).Unit) end
+        if dot - dv(1) < dth or dot - dv(2) < dth then return true end
+    end
+    
+    local hp = Vector3.new(p.X - bp.X, 0, p.Z - bp.Z).Unit
+    local bd = Vector3.new(d.X, 0, d.Z).Unit
+    if hp.Magnitude > 0 and bd.Magnitude > 0 then
+        local back = math.deg(math.acos(math.clamp((-hp):Dot(bd), -1, 1)))
+        if back < 90 - ping / 25 then return true end
+    end
+    
+    return dot < dth
+end
+
+StarX.Get_Closest = function()
+    local Max_Distance = math.huge
+    for _, Entity in pairs(workspace.Alive:GetChildren()) do
+        if (tostring(Entity) ~= tostring(LocalPlayer)) then
+            local Distance = LocalPlayer:DistanceFromCharacter(Entity.PrimaryPart.Position)
+            if (Distance < Max_Distance) then
+                Max_Distance = Distance
+                Closest_Entity = Entity
+            end
+        end
+    end
+    return Closest_Entity
+end
+
+local mouse = Players.LocalPlayer:GetMouse()
+local old_March = CoreGui:FindFirstChild("March")
+
+if old_March then
+    Debris:AddItem(old_March, 0)
+end
+
+if not isfolder("March") then
+    makefolder("March")
+end
+
+local Connections = setmetatable({
+    disconnect = function(self, connection)
+        if not self[connection] then
+            return
+        end
+        self[connection]:Disconnect()
+        self[connection] = nil
+    end,
+    disconnect_all = function(self)
+        for _, value in self do
+            if typeof(value) == "function" then
+                continue
+            end
+            value:Disconnect()
+        end
+    end
+}, Connections)
+
+local Util = setmetatable({
+    map = function(self: any, value: number, in_minimum: number, in_maximum: number, out_minimum: number, out_maximum: number)
+        return (value - in_minimum) * (out_maximum - out_minimum) / (in_maximum - in_minimum) + out_minimum
+    end,
+    viewport_point_to_world = function(self: any, location: any, distance: number)
+        local unit_ray = workspace.CurrentCamera:ScreenPointToRay(location.X, location.Y)
+        return unit_ray.Origin + unit_ray.Direction * distance
+    end,
+    get_offset = function(self: any)
+        local viewport_size_Y = workspace.CurrentCamera.ViewportSize.Y
+        return self:map(viewport_size_Y, 0, 2560, 8, 56)
+    end
+}, Util)
+
+local Config = setmetatable({
+    save = function(self: any, file_name: any, config: any)
+        local success_save, result = pcall(function()
+            local flags = HttpService:JSONEncode(config)
+            writefile("March/"..file_name..".json", flags)
+        end)
+        if not success_save then
+            warn("failed to save config", result)
+        end
+    end,
+    load = function(self: any, file_name: any, config: any)
+        local success_load, result = pcall(function()
+            if not isfile("March/"..file_name..".json") then
+                self:save(file_name, config)
+                return
+            end
+            local flags = readfile("March/"..file_name..".json")
+            if not flags then
+                self:save(file_name, config)
+                return
+            end
+            return HttpService:JSONDecode(flags)
+        end)
+        if not success_load then
+            warn("failed to load config", result)
+        end
+        if not result then
+            result = {
+                _flags = {},
+                _keybinds = {},
+                _library = {}
+            }
+        end
+        return result
+    end
+}, Config)
+
+local Library = {
+    _config = Config:load(game.GameId),
+    _choosing_keybind = false,
+    _device = nil,
+    _ui_open = true,
+    _ui_scale = 1,
+    _ui_loaded = false,
+    _ui = nil,
+    _dragging = false,
+    _drag_start = nil,
+    _container_position = nil
+}
+Library.__index = Library
+
+function Library.new()
+    local self = setmetatable({
+        _loaded = false,
+        _tab = 0,
+    }, Library)
+    self:create_ui()
+    return self
+end
+
+-- Create Notification Container
+local NotificationContainer = Instance.new("Frame")
+NotificationContainer.Name = "RobloxCoreGuis"
+NotificationContainer.Size = UDim2.new(0, 300, 0, 0)
+NotificationContainer.Position = UDim2.new(0.8, 0, 0, 10)
+NotificationContainer.BackgroundTransparency = 1
+NotificationContainer.ClipsDescendants = false
+NotificationContainer.Parent = game:GetService("CoreGui").RobloxGui:FindFirstChild("RobloxCoreGuis") or Instance.new("ScreenGui", game:GetService("CoreGui").RobloxGui)
+NotificationContainer.AutomaticSize = Enum.AutomaticSize.Y
+
+-- UIListLayout to arrange notifications vertically
+local UIListLayout = Instance.new("UIListLayout")
+UIListLayout.FillDirection = Enum.FillDirection.Vertical
+UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+UIListLayout.Padding = UDim.new(0, 10)
+UIListLayout.Parent = NotificationContainer
+
+-- Function to create notifications
+function Library.SendNotification(settings)
+    -- Create the notification frame
+    local Notification = Instance.new("Frame")
+    Notification.Size = UDim2.new(1, 0, 0, 60)
+    Notification.BackgroundTransparency = 1
+    Notification.BorderSizePixel = 0
+    Notification.Name = "Notification"
+    Notification.Parent = NotificationContainer
+    Notification.AutomaticSize = Enum.AutomaticSize.Y
+
+    -- Add rounded corners to outer frame
+    local UICorner = Instance.new("UICorner")
+    UICorner.CornerRadius = UDim.new(0, 4)
+    UICorner.Parent = Notification
+
+    -- Create the inner frame for the notification's content
+    local InnerFrame = Instance.new("Frame")
+    InnerFrame.Size = UDim2.new(1, 0, 0, 60)
+    InnerFrame.Position = UDim2.new(0, 0, 0, 0)
+    InnerFrame.BackgroundColor3 = Color3.fromRGB(32, 38, 51)
+    InnerFrame.BackgroundTransparency = 0.1
+    InnerFrame.BorderSizePixel = 0
+    InnerFrame.Name = "InnerFrame"
+    InnerFrame.Parent = Notification
+    InnerFrame.AutomaticSize = Enum.AutomaticSize.Y
+
+    -- Add rounded corners to the inner frame
+    local InnerUICorner = Instance.new("UICorner")
+    InnerUICorner.CornerRadius = UDim.new(0, 4)
+    InnerUICorner.Parent = InnerFrame
+
+    -- Title Label (with automatic size support)
+    local Title = Instance.new("TextLabel")
+    Title.Text = settings.title or "Notification Title"
+    Title.TextColor3 = Color3.fromRGB(210, 210, 210)
+    Title.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
+    Title.TextSize = 14
+    Title.Size = UDim2.new(1, -10, 0, 20)
+    Title.Position = UDim2.new(0, 5, 0, 5)
+    Title.BackgroundTransparency = 1
+    Title.TextXAlignment = Enum.TextXAlignment.Left
+    Title.TextYAlignment = Enum.TextYAlignment.Center
+    Title.TextWrapped = true
+    Title.AutomaticSize = Enum.AutomaticSize.Y
+    Title.Parent = InnerFrame
+
+    -- Body Text (with automatic size support)
+    local Body = Instance.new("TextLabel")
+    Body.Text = settings.text or "This is the body of the notification."
+    Body.TextColor3 = Color3.fromRGB(180, 180, 180)
+    Body.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Regular, Enum.FontStyle.Normal)
+    Body.TextSize = 12
+    Body.Size = UDim2.new(1, -10, 0, 30)
+    Body.Position = UDim2.new(0, 5, 0, 25)
+    Body.BackgroundTransparency = 1
+    Body.TextXAlignment = Enum.TextXAlignment.Left
+    Body.TextYAlignment = Enum.TextYAlignment.Top
+    Body.TextWrapped = true
+    Body.AutomaticSize = Enum.AutomaticSize.Y
+    Body.Parent = InnerFrame
+
+    -- Force the size to adjust after the text is fully loaded and wrapped
+    task.spawn(function()
+        wait(0.1)
+        local totalHeight = Title.TextBounds.Y + Body.TextBounds.Y + 10
+        InnerFrame.Size = UDim2.new(1, 0, 0, totalHeight)
+    end)
+
+    -- Use task.spawn to ensure the notification tweening happens asynchronously
+    task.spawn(function()
+        -- Tween In the Notification (inner frame)
+        local tweenIn = TweenService:Create(InnerFrame, TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+            Position = UDim2.new(0, 0, 0, 10 + NotificationContainer.Size.Y.Offset)
+        })
+        tweenIn:Play()
+
+        -- Wait for the duration before tweening out
+        local duration = settings.duration or 5
+        wait(duration)
+
+        -- Tween Out the Notification (inner frame) to the right side of the screen
+        local tweenOut = TweenService:Create(InnerFrame, TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.In), {
+            Position = UDim2.new(1, 310, 0, 10 + NotificationContainer.Size.Y.Offset)
+        })
+        tweenOut:Play()
+
+        -- Remove the notification after it is done tweening out
+        tweenOut.Completed:Connect(function()
+            Notification:Destroy()
+        end)
+    end)
+end
+
+function Library:get_screen_scale()
+    local viewport_size_x = workspace.CurrentCamera.ViewportSize.X
+    self._ui_scale = viewport_size_x / 1400
+end
+
+function Library:get_device()
+    local device = "Unknown"
+    if not UserInputService.TouchEnabled and UserInputService.KeyboardEnabled and UserInputService.MouseEnabled then
+        device = "PC"
+    elseif UserInputService.TouchEnabled then
+        device = "Mobile"
+    elseif UserInputService.GamepadEnabled then
+        device = "Console"
+    end
+    self._device = device
+end
+
+function Library:removed(action: any)
+    self._ui.AncestryChanged:Once(action)
+end
+
+function Library:flag_type(flag: any, flag_type: any)
+    if not Library._config._flags[flag] then
+        return
+    end
+    return typeof(Library._config._flags[flag]) == flag_type
+end
+
+function Library:remove_table_value(__table: any, table_value: string)
+    for index, value in __table do
+        if value ~= table_value then
+            continue
+        end
+        table.remove(__table, index)
+    end
+end
+
+function Library:create_ui()
+    local old_March = CoreGui:FindFirstChild("March")
+    if old_March then
+        Debris:AddItem(old_March, 0)
+    end
+
+    local March = Instance.new("ScreenGui")
+    March.ResetOnSpawn = false
+    March.Name = "ikorz"
+    March.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    March.Parent = CoreGui
+    
+    local Container = Instance.new("Frame")
+    Container.ClipsDescendants = true
+    Container.BorderColor3 = Color3.fromRGB(0, 0, 0)
+    Container.AnchorPoint = Vector2.new(0.5, 0.5)
+    Container.Name = "Container"
+    Container.BackgroundTransparency = 0.05000000074505806
+    Container.BackgroundColor3 = Color3.fromRGB(12, 13, 15)
+    Container.Position = UDim2.new(0.5, 0, 0.5, 0)
+    Container.Size = UDim2.new(0, 0, 0, 0)
+    Container.Active = true
+    Container.BorderSizePixel = 0
+    Container.Parent = March
+    
+    local UICorner = Instance.new("UICorner")
+    UICorner.CornerRadius = UDim.new(0, 10)
+    UICorner.Parent = Container
+    
+    local UIStroke = Instance.new("UIStroke")
+    UIStroke.Color = Color3.fromRGB(52, 66, 89)
+    UIStroke.Transparency = 0.5
+    UIStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    UIStroke.Parent = Container
+    
+    local Handler = Instance.new("Frame")
+    Handler.BackgroundTransparency = 1
+    Handler.Name = "Handler"
+    Handler.BorderColor3 = Color3.fromRGB(0, 0, 0)
+    Handler.Size = UDim2.new(0, 698, 0, 479)
+    Handler.BorderSizePixel = 0
+    Handler.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    Handler.Parent = Container
+    
+    local Tabs = Instance.new("ScrollingFrame")
+    Tabs.ScrollBarImageTransparency = 1
+    Tabs.ScrollBarThickness = 0
+    Tabs.Name = "Tabs"
+    Tabs.Size = UDim2.new(0, 129, 0, 401)
+    Tabs.Selectable = false
+    Tabs.AutomaticCanvasSize = Enum.AutomaticSize.XY
+    Tabs.BackgroundTransparency = 1
+    Tabs.Position = UDim2.new(0.026097271591424942, 0, 0.1111111119389534, 0)
+    Tabs.BorderColor3 = Color3.fromRGB(0, 0, 0)
+    Tabs.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    Tabs.BorderSizePixel = 0
+    Tabs.CanvasSize = UDim2.new(0, 0, 0.5, 0)
+    Tabs.Parent = Handler
+    
+    local UIListLayout = Instance.new("UIListLayout")
+    UIListLayout.Padding = UDim.new(0, 4)
+    UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    UIListLayout.Parent = Tabs
+    
+    local ClientName = Instance.new("TextLabel")
+    ClientName.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
+    ClientName.TextColor3 = Color3.fromRGB(152, 181, 255)
+    ClientName.TextTransparency = 0.20000000298023224
+    ClientName.Text = "ikorz"
+    ClientName.Name = "ClientName"
+    ClientName.Size = UDim2.new(0, 31, 0, 13)
+    ClientName.AnchorPoint = Vector2.new(0, 0.5)
+    ClientName.Position = UDim2.new(0.0560000017285347, 0, 0.054999999701976776, 0)
+    ClientName.BackgroundTransparency = 1
+    ClientName.TextXAlignment = Enum.TextXAlignment.Left
+    ClientName.BorderSizePixel = 0
+    ClientName.BorderColor3 = Color3.fromRGB(0, 0, 0)
+    ClientName.TextSize = 13
+    ClientName.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    ClientName.Parent = Handler
+    
+    local UIGradient = Instance.new("UIGradient")
+    UIGradient.Color = ColorSequence.new{
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(155, 155, 155)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 255, 255))
+    }
+    UIGradient.Parent = ClientName
+    
+    local Pin = Instance.new("Frame")
+    Pin.Name = "Pin"
+    Pin.Position = UDim2.new(0.026000000536441803, 0, 0.13600000739097595, 0)
+    Pin.BorderColor3 = Color3.fromRGB(0, 0, 0)
+    Pin.Size = UDim2.new(0, 2, 0, 16)
+    Pin.BorderSizePixel = 0
+    Pin.BackgroundColor3 = Color3.fromRGB(152, 181, 255)
+    Pin.Parent = Handler
+    
+    local UICorner = Instance.new("UICorner")
+    UICorner.CornerRadius = UDim.new(1, 0)
+    UICorner.Parent = Pin
+    
+    local Icon = Instance.new("ImageLabel")
+    Icon.ImageColor3 = Color3.fromRGB(152, 181, 255)
+    Icon.ScaleType = Enum.ScaleType.Fit
+    Icon.BorderColor3 = Color3.fromRGB(0, 0, 0)
+    Icon.AnchorPoint = Vector2.new(0, 0.5)
+    Icon.Image = "rbxassetid://107819132007001"
+    Icon.BackgroundTransparency = 1
+    Icon.Position = UDim2.new(0.02500000037252903, 0, 0.054999999701976776, 0)
+    Icon.Name = "Icon"
+    Icon.Size = UDim2.new(0, 18, 0, 18)
+    Pin.BorderSizePixel = 0
+    Icon.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    Icon.Parent = Handler
+    
+    local Divider = Instance.new("Frame")
+    Divider.Name = "Divider"
+    Divider.BackgroundTransparency = 0.5
+    Divider.Position = UDim2.new(0.23499999940395355, 0, 0, 0)
+    Divider.BorderColor3 = Color3.fromRGB(0, 0, 0)
+    Divider.Size = UDim2.new(0, 1, 0, 479)
+    Divider.BorderSizePixel = 0
+    Divider.BackgroundColor3 = Color3.fromRGB(52, 66, 89)
+    Divider.Parent = Handler
+    
+    local Sections = Instance.new("Folder")
+    Sections.Name = "Sections"
+    Sections.Parent = Handler
+    
+    local Minimize = Instance.new("TextButton")
+    Minimize.FontFace = Font.new("rbxasset://fonts/families/SourceSansPro.json", Enum.FontWeight.Regular, Enum.FontStyle.Normal)
+    Minimize.TextColor3 = Color3.fromRGB(0, 0, 0)
+    Minimize.BorderColor3 = Color3.fromRGB(0, 0, 0)
+    Minimize.Text = ""
+    Minimize.AutoButtonColor = false
+    Minimize.Name = "Minimize"
+    Minimize.BackgroundTransparency = 1
+    Minimize.Position = UDim2.new(0.020057305693626404, 0, 0.02922755666077137, 0)
+    Minimize.Size = UDim2.new(0, 24, 0, 24)
+    Minimize.BorderSizePixel = 0
+    Minimize.TextSize = 14
+    Minimize.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    Minimize.Parent = Handler
+    
+    local UIScale = Instance.new("UIScale")
+    UIScale.Parent = Container    
+    
+    self._ui = March
+
+    local function on_drag(input: InputObject, process: boolean)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then 
+            self._dragging = true
+            self._drag_start = input.Position
+            self._container_position = Container.Position
+
+            Connections["container_input_ended"] = input.Changed:Connect(function()
+                if input.UserInputState ~= Enum.UserInputState.End then
+                    return
+                end
+                Connections:disconnect("container_input_ended")
+                self._dragging = false
+            end)
+        end
+    end
+
+    local function update_drag(input: any)
+        local delta = input.Position - self._drag_start
+        local position = UDim2.new(self._container_position.X.Scale, self._container_position.X.Offset + delta.X, self._container_position.Y.Scale, self._container_position.Y.Offset + delta.Y)
+        TweenService:Create(Container, TweenInfo.new(0.2), {
+            Position = position
+        }):Play()
+    end
+
+    local function drag(input: InputObject, process: boolean)
+        if not self._dragging then
+            return
+        end
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            update_drag(input)
+        end
+    end
+
+    Connections["container_input_began"] = Container.InputBegan:Connect(on_drag)
+    Connections["input_changed"] = UserInputService.InputChanged:Connect(drag)
+
+    self:removed(function()
+        self._ui = nil
+        Connections:disconnect_all()
+    end)
+
+    function self:Update1Run(a)
+        if a == "nil" then
+            Container.BackgroundTransparency = 0.05000000074505806;
+        else
+            pcall(function()
+                Container.BackgroundTransparency = tonumber(a);
+            end);
+        end;
+    end;
+
+    function self:UIVisiblity()
+        March.Enabled = not March.Enabled;
+    end;
+
+    function self:change_visiblity(state: boolean)
+        if state then
+            TweenService:Create(Container, TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+                Size = UDim2.fromOffset(698, 479)
+            }):Play()
+        else
+            TweenService:Create(Container, TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+                Size = UDim2.fromOffset(104.5, 52)
+            }):Play()
+        end
+    end
+    
+    function self:load()
+        local content = {}
+        for _, object in March:GetDescendants() do
+            if not object:IsA("ImageLabel") then
+                continue
+            end
+            table.insert(content, object)
+        end
+        ContentProvider:PreloadAsync(content)
+        self:get_device()
+
+        if self._device == "Mobile" or self._device == "Unknown" then
+            self:get_screen_scale()
+            UIScale.Scale = self._ui_scale
+            Connections["ui_scale"] = workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+                self:get_screen_scale()
+                UIScale.Scale = self._ui_scale
+            end)
+        end
+        TweenService:Create(Container, TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+            Size = UDim2.fromOffset(698, 479)
+        }):Play()
+        self._ui_loaded = true
+    end
+
+    function self:update_tabs(tab: TextButton)
+        for index, object in Tabs:GetChildren() do
+            if object.Name ~= "Tab" then
+                continue
+            end
+            if object == tab then
+                if object.BackgroundTransparency ~= 0.5 then
+                    local offset = object.LayoutOrder * (0.113 / 1.3)
+                    TweenService:Create(Pin, TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+                        Position = UDim2.fromScale(0.026, 0.135 + offset)
+                    }):Play()    
+                    TweenService:Create(object, TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+                        BackgroundTransparency = 0.5
+                    }):Play()
+                    TweenService:Create(object.TextLabel, TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+                        TextTransparency = 0.2,
+                        TextColor3 = Color3.fromRGB(152, 181, 255)
+                    }):Play()
+                    TweenService:Create(object.TextLabel.UIGradient, TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+                        Offset = Vector2.new(1, 0)
+  
