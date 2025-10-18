@@ -1,0 +1,125 @@
+local Translations = {
+   ["Stamina_Settings"] = " stamina 设置",
+   ["Esp"] = " 显示增强",
+   ["Auto Block"] = " 自动格挡",
+   ["Misc"] = " 杂项",
+   ["Auto_Stun"] = " 自动眩晕",
+   ["Random"] = " 随机",
+   ["Hitbox_expander"] = " 碰撞箱扩大",
+   ["Generator"] = " 生成器",
+   ["Teleport"] = " 传送",
+   ["AI"] = " 人工智能",
+   ["Settings"] = "设置",
+   ["Credits"] = "鸣谢",
+   ["Infinite Stamina"] = "无限耐力",
+   ["Max Stamina"] = "最大耐力",
+   ["Minimum Stamina"] = "最小耐力",
+   ["Sprint Speed"] = " sprint 速度",
+   ["Stamina Gain"] = "耐力恢复",
+   ["Stamina Drain"] = "耐力消耗",
+   ["Regen Delay"] = "恢复延迟",
+   ["ESP Killer"] = "杀手显示增强",
+   ["ESP Survivors"] = "幸存者显示增强",
+   ["ESP Medkit"] = "医疗包显示增强",
+   ["ESP BloxyCola"] = "Bloxy 可乐显示增强",
+   ["Esp Back of the killer (two time)"] = "杀手背部显示增强（两倍）",
+   ["ESP Generators"] = "发电机显示增强",
+   ["Sentry/Dispenser ESP"] = "哨戒炮/补给器显示增强",
+   ["Auto Block(animation)"] = "自动格挡（动画）",
+   ["Detection Range(Animation)"] = "检测范围（动画）",
+   ["Windup %"] = "蓄力百分比",
+   ["Load Auto Block (Audio)"] = "加载自动格挡（音频）",
+   ["Auto Punch"] = "自动出拳",
+   ["Aim Mode"] = "瞄准模式",
+   ["Fling Power"] = "抛掷力度",
+   ["Prediction Time"] = "预测时间",
+   ["Hitbox Dragging Tech"] = "碰撞箱拖拽技术",
+   ["Mode"] = "模式",
+   ["BodyVelocity Speed"] = "身体速度",
+   ["Load Auto Clon (Auto Clon 007n7)"] = "加载自动克隆（自动克隆 007n7）",
+   ["ms checker"] = "毫秒检查器",
+   ["Auto Block"] = "自动格挡",
+   ["Normal is NOT Legit, Normal+Anti Bait is Blatant, Normal+Anti Bait V2 is Legit For pro players that need to look Legit"] = "普通模式不算合规，普通+防诱饵模式很显眼，普通+防诱饵 V2 对需要看起来合规的职业玩家来说是合规的",
+   ["Chat visibility"] = "聊天可见性",
+   ["Fullbright"] = "全亮度",
+   ["Anti Fog"] = "防雾",
+   ["Remove Effects"] = "移除效果",
+   ["Anti Slow"] = "防减速",
+   ["Anti Stun"] = "防眩晕",
+   ["Load Invisibility"] = "加载隐身",
+   ["Auto Close 1×1×1×1 Popups"] = "自动关闭 1×1×1×1 弹窗",
+   ["VoidRush No-Crash"] = "虚空冲刺防崩溃",
+   ["Void Rush full Control (Noli)"] = "虚空冲刺完全控制（诺利）",
+   ["Auto Eat Pizza"] = "自动吃披萨",
+   ["HP Threshold"] = "生命值阈值",
+   ["Auto heal Teammates (Elliot)"] = "自动治疗队友（埃利奥特）",
+   ["Hitbox visualization"] = "碰撞箱可视化",
+   ["Load Auto Invisibility(007n7)"] = "加载自动隐身（007n7）",
+   ["Load Auto Invisibility(Two Time)"] = "加载自动隐身（两次）",
+   ["Load Auto Invisibility(Noob)"] = "加载自动隐身（新手）",
+   ["Silent Aim(c00lkid/Dusekkar)"] = "静默瞄准（c00lkid/Dusekkar）",
+   ["Auto Stun Killer(Chance)"] = "自动眩晕杀手（概率）",
+   ["Chance Aimbot"] = "概率自瞄",
+   ["Sharpness (high ping = > 4)"] = "锐度（高延迟时设为＞4）",
+   ["Load Auto Parry"] = "加载自动格挡",
+   ["Load Backstab (Two Time)"] = "加载背刺（两次）",
+   ["Fling (works only on killer)"] = "抛掷（仅对杀手生效）",
+   ["Aimbot"] = "自瞄",
+   ["Load Orbit"] = "加载环绕",
+   ["Speed Boost(Like Eliot's Rush Hour)"] = "速度提升（类似埃利奥特的高峰时段）",
+   ["Kill aura (killer)"] = "杀戮 aura（杀手）",
+   ["Load Hide Names"] = "加载隐藏名称",
+   ["Hide names"] = "隐藏名称",
+   ["DO NOT SPECTATE PLAYER'S WHEN HIDE NAMES ENABLED (u can when its off)"] = "启用隐藏名称时不要观察玩家（关闭时可以观察）",
+   ["Fake animation(Guest)"] = "假动画（访客）",
+   ["Load Custom Lms"] = "加载自定义 Lms",
+   ["Load Anti Sentry"] = "加载反哨戒炮",
+   ["Auto Delete John Doe Spikes"] = "自动删除 John Doe 尖刺",
+   ["Random Skin For Guest"] = "访客随机皮肤",
+   ["Load Hitbox Expander V12(expands where u looking at working better with Guest)"] = "加载碰撞箱扩大器 V12（会在你注视的地方扩大，与访客模式配合效果更好）",
+   ["Load Reach (New)"] = "加载攻击距离扩展（新）",
+   ["Load Punch Hitbox Expander"] = "加载拳击碰撞箱扩大器",
+   ["Fix generator manual"] = "手动修理发电机",
+   ["Auto Fix Generators"] = "自动修理发电机",
+   ["Tp to Killer"] = "传送至杀手",
+   ["Tp to Survivor"] = "传送至幸存者",
+   ["Tp to Generator"] = "传送至发电机",
+   ["Tp to Medkit"] = "传送至医疗包",
+   ["Tp to BloxyCola"] = "传送至 Bloxy 可乐",
+   ["AI PLAY"] = "AI 游玩",
+   ["Use With Noclip"] = "与穿墙模式配合使用",
+   
+    
+    
+}
+
+local function translateText(text)
+    if not text or type(text) ~= "string" then return text end
+    
+    if Translations[text] then
+        return Translations[text]
+    end
+    
+    for en, cn in pairs(Translations) do
+        if text:find(en) then
+            return text:gsub(en, cn)
+        end
+    end
+    
+    return text
+end
+
+local function setupTranslationEngine()
+    local success, err = pcall(function()
+        local oldIndex = getrawmetatable(game).__newindex
+        setreadonly(getrawmetatable(game), false)
+        
+        getrawmetatable(game).__newindex = newcclosure(function(t, k, v)
+            if (t:IsA("TextLabel") or t:IsA("TextButton") or t:IsA("TextBox")) and k == "Text" then
+                v = translateText(tostring(v))
+            end
+            return oldIndex(t, k, v)
+        end)
+        
+        setreadonly(getrawmetatable(game), true)
+    end
