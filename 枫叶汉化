@@ -1,0 +1,102 @@
+local Translations = {
+["Toggle"] = "打开脚本",
+    ["Lock"] = "锁定Ui",
+    ["Websling Aim"] = "网绳瞄准",
+    ["Main"] = "功能区",
+    ["Lnfo"] = "信息",
+    ["Config"] = "配置",
+    ["Main"] = "主菜单",
+    ["Mainfeatures"] = "主要功能",
+    ["Search"] = "搜索",
+    ["Special"] = "特殊",
+    ["Websling Panel"] = "蛛丝发射面板",
+    ["Gazer Beam"] = "凝视者射线",
+    ["Spam Beam"] = "垃圾信息射线",
+    ["Base Guard"] = "基地守卫",
+    ["Ugly's Helper"] = "丑陋助手",
+    ["FPS DEVOURER"] = "帧率吞噬者",
+    ["Ugly Fly"] = "丑陋飞行",
+    ["Auto Buy"] = "自动购买",
+    ["Made by Ugly V5.3"] = "由丑陋 V5.3 制作",
+    ["Helpers"] = "助手",
+    ["Sentry Destroy"] = "哨兵摧毁",
+    ["Reminder"] = "提醒",
+    ["Anti-AFK"] = "防挂机",
+    ["Infinite Jump"] = "无限跳跃",
+    ["Server Hop"] = "服务器切换",
+    ["JobId"] = "任务ID",
+    ["Paste JobId here"] = "在此处粘贴任务ID",
+    ["Join JobId"] = "加入任务ID"
+    ["Auto Buy"] = "自动购买",
+    ["Select Animals"] = "选择动物",
+    ["Enable Auto Buy"] = "启用自动购买",
+    ["Walk Speed"] = "移动速度",
+    ["Esp"] = "透视",
+    ["Player Tracer"] = "玩家追踪",
+    ["Lock Timer ESP"] = "锁定计时器透视",
+    ["Anti-Invisibili"] = "反隐形",
+    ["Highest Value"] = "最高价值",
+    ["Item ESP"] = "物品透视",
+    ["Base ESP"] = "基地透视"
+    ["About"] = "关于",
+    ["Right-Ctrl to toggle UI"]= "右Ctrl键切换界面",
+    ["Welcome back. -Ugly"]= "欢迎回来。 -Ugly",
+    ["Discord Server"]= "Discord服务器",
+    ["Server"]= "服务器",
+    ["Members"]= "成员",
+    ["Join Discord"]= "加入Discord"
+    ["Configuration UI Settings"] = "配置界面设置",
+    ["UI Scale"]= "界面缩放",
+    ["100%/150%"]= "100%/150%"
+}
+
+local keys = {}
+for k in pairs(Translations) do
+    table.insert(keys, k)
+end
+table.sort(
+    keys,
+    function(a, b)
+        return #a > #b
+    end
+)
+
+local function safeReplace(text, old, new)
+    local result = ""
+    local start = 1
+    while true do
+        local i, j = string.find(text, old, start, true)
+        if not i then
+            result = result .. string.sub(text, start)
+            break
+        end
+        result = result .. string.sub(text, start, i - 1) .. new
+        start = j + 1
+    end
+    return result
+end
+
+local function translateText(text)
+    if not text or type(text) ~= "string" then
+        return text
+    end
+    for _, k in ipairs(keys) do
+        text = safeReplace(text, k, Translations[k])
+    end
+    return text
+end
+
+local oldNewIndex
+oldNewIndex =
+    hookmetamethod(
+    game,
+    "__newindex",
+    function(self, key, value)
+        if key == "Text" and type(value) == "string" then
+            value = translateText(value)
+        end
+        return oldNewIndex(self, key, value)
+    end
+)
+
+loadstring(game:HttpGet("https://api.luarmor.net/files/v3/loaders/53325754de16c11fbf8bf78101c1c881.lua"))()
